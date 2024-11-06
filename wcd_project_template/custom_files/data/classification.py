@@ -1,20 +1,19 @@
 import os
 from typing import Tuple, Union, Optional
 
-import Albumentations as A
+import albumentations as A
 import cv2
 import pandas as pd
 
-from ...data import Data
+from wcd_project_template.data import Data
 
 class DataClassification(Data):
     def __init__(
             self,
-            csv_file: os.PathLike[str],
-            root_dir: os.PathLike[str],
+            config_data: dict,
             transform: Optional[A.Compose] = None
         ):
-        super().__init__(csv_file, root_dir, transform)
+        super().__init__(config_data, transform)
 
     def get_input(self, row):
         image_path = os.path.join(self.root_dir, row['filename'])

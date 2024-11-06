@@ -3,15 +3,15 @@ import importlib
 
 import torch
 
-from .utils import load_from_import_str
+from wcd_project_template.utils import load_from_import_str
 
 class Model(ABC):
     def __init__(self, model_cls, config_model):
         self.config_model = config_model
         if isinstance(model_cls, str):
-            self.model = self.load_from_import_str(model_cls)
-        else:
-            self.model = model_cls(**self.config_model['model_hyperparameters'])
+            model_cls = load_from_import_str(model_cls)
+
+        self.model = model_cls(**self.config_model['model_hyperparameters'])
         
         if self.config_model['weights_path'] is not None:
             self.model = self.load_model_weights(self.model)

@@ -3,7 +3,7 @@ import numpy as np
 import os
 from typing import Tuple, Union, Optional
 
-import Albumentations as A
+import albumentations as A
 import torch
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd

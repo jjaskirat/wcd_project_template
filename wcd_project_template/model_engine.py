@@ -11,8 +11,9 @@ from .utils import load_from_import_str
 class ModelEngine:
     def __init__(
         self,
+        device
     ):
-        pass
+        self.device = device
 
     def train(self, model, data_train, data_valid, config_training, config_evaluation):
         """
