@@ -1,5 +1,8 @@
 import importlib
 
-def load_from_import_str(import_str):
-    model = importlib.import_module(import_str)
-    return model
+def load_from_import_str(name):
+    components = name.split('.')
+    mod = __import__(components[0])
+    for comp in components[1:]:
+        mod = getattr(mod, comp)
+    return mod

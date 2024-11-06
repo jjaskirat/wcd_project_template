@@ -4,9 +4,9 @@ import torch
 from tqdm import tqdm
 from typing import Any, Callable, Tuple
 
-from .data import Data
-from .model import Model
-from .utils import load_from_import_str
+from wcd_project_template.data import Data
+from wcd_project_template.model import Model
+from wcd_project_template.utils import load_from_import_str
 
 class ModelEngine:
     def __init__(
@@ -20,13 +20,13 @@ class ModelEngine:
         Training Loop
         """
         # model = self.model
-        optimizer = self._get_optimizer(model.model)
-        criterion = self._get_criterion()
-        metric = self._get_metric()
+        optimizer = self._get_optimizer(model.model, config_training)
+        criterion = self._get_criterion(config_training)
+        metric = self._get_metric(config_training)
         # df_train, df_val = self._get_df_splits()
         dataloader_train = data_train.get_dataloader()
         num_epochs = config_training['num_epochs']
-        print("Total Training Samples: ", len(self.data_train))
+        print("Total Training Samples: ", len(data_train))
         for epoch in tqdm(range(num_epochs)):
             train_start_time = time.monotonic()
             # Train one epoch
@@ -37,10 +37,10 @@ class ModelEngine:
             val_loss, val_metric = self.evaluate(model, data_valid, config_evaluation)
             val_end_time = time.monotonic()
             # Append loss and accuracy to class lists
-            self.train_loss_list.append(train_loss)
-            self.train_metric_list.append(train_metric)
-            self.val_loss_list.append(val_loss)
-            self.val_metric_list.append(val_metric)
+            # self.train_loss_list.append(train_loss)
+            # self.train_metric_list.append(train_metric)
+            # self.val_loss_list.append(val_loss)
+            # self.val_metric_list.append(val_metric)
             # Prints
             print("Epoch-%d: " % (epoch+1))
             print("Training: Loss = %.4f, Accuracy = %.4f, Time = %.2f seconds"\
@@ -48,8 +48,8 @@ class ModelEngine:
             print("Validation: Loss = %.4f, Accuracy = %.4f, Time = %.2f seconds"\
                 % (val_loss, val_metric, val_end_time - val_start_time))
             print("")
-        self._save_model(model)
-        print(f'model saved at: {self.save_dir}/{self.name}.pth')
+        # self._save_model(model)
+        # print(f'model saved at: {self.save_dir}/{self.name}.pth')
         print("="*50)
         return model
 
@@ -154,7 +154,8 @@ class ModelEngine:
         val_loss = criterion(output, label).item()
         return val_loss, val_metric
     
-    def _get_optimizer(self, model: Model) -> torch.optim.Optimizer:
+    @staticmethod
+    def _get_optimizer(model: Model, config: dict) -> torch.optim.Optimizer:
         """returns the PyTorch Optimizer from config
         Parameters loaded are the model parameters
 
@@ -165,8 +166,8 @@ class ModelEngine:
             optim: Optimizer
             Only from the library: PyTorch
         """
-        optimizer_name = self.config_training['optimizer']['name']
-        optimizer_config = self.config_training['optimizer']['config']
+        optimizer_name = config['optimizer']['name']
+        optimizer_config = config['optimizer']['config']
         optimizer_cls = getattr(torch.optim, optimizer_name)
         optimizer = optimizer_cls(
                         params = model.parameters(),

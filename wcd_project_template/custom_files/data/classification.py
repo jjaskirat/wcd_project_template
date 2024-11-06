@@ -10,10 +10,11 @@ from wcd_project_template.data import Data
 class DataClassification(Data):
     def __init__(
             self,
+            df,
             config_data: dict,
             transform: Optional[A.Compose] = None
         ):
-        super().__init__(config_data, transform)
+        super().__init__(df, config_data, transform)
 
     def get_input(self, row):
         image_path = os.path.join(self.root_dir, row['filename'])

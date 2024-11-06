@@ -11,11 +11,12 @@ import pandas as pd
 class Data(ABC, Dataset):
     def __init__(
         self,
+        df,
         config_data: dict,
         transform: Optional[A.Compose] = None
     ):
         self.config_data = config_data
-        self.df = self.config_data['df']
+        self.df = df
         self.root_dir = self.config_data['root_dir']
         self.transform = transform
 
