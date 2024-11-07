@@ -7,5 +7,14 @@ setup(
    author='Jaskirat Singh Bhatia',
    author_email='jaskirat.bhatia.work@gmail.com',
    packages=find_packages(),
-   install_requires=['albumentations'], #external packages as dependencies
+   install_requires=[
+       'albumentations',
+       'timm',
+       'numpy',
+       'matplotlib',
+       'pandas',
+       'torch',
+       'torchmetrics',
+       'tqdm',
+   ], #external packages as dependencies
 )

@@ -1,11 +1,10 @@
-from abc import ABC, abstractmethod
-import importlib
-
 import torch
 
 from wcd_project_template.utils import load_from_import_str
 
-class Model(ABC):
+class Model():
+    """The Model class is a Wrapper over the torch Module created.
+    """
     def __init__(self, model_cls, config_model):
         self.config_model = config_model
         if isinstance(model_cls, torch.nn.Module):

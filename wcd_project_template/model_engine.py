@@ -1,8 +1,8 @@
-from abc import ABC, abstractmethod
+import matplotlib.pyplot as plt
 import time
 import torch
 from tqdm import tqdm
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Tuple, Union, List
 
 from wcd_project_template.data import Data
 from wcd_project_template.model import Model
@@ -15,44 +15,92 @@ class ModelEngine:
     ):
         self.device = device
 
-    def train(self, model, data_train, data_valid, config_training, config_evaluation):
+    def train(
+            self,
+            model: Model,
+            data_train: Data,
+            data_valid: Data,
+            config_training: dict,
+            config_evaluation: dict,
+        ) -> Model:
+        """_summary_
+
+        Args:
+            model (Model): the model to be trained
+            data_train (Data): training data
+            data_valid (Data): validation data
+            config_training (dict): training configuration
+            config_evaluation (dict): evaluation configuration
+
+        Returns:
+            Model: the trained model
         """
-        Training Loop
-        """
-        # model = self.model
+        training_meta_data = {
+            'loss_train': [],
+            'loss_valid': [],
+            'metric_train': [],
+            'metric_valid': [],
+        }
+
+        model.model.to(self.device)
         optimizer = self._get_optimizer(model.model, config_training)
         criterion = self._get_criterion(config_training)
-        metric = self._get_metric(config_training)
+        metric = self._get_metric(config_training).to(self.device)
         # df_train, df_val = self._get_df_splits()
         dataloader_train = data_train.get_dataloader()
         num_epochs = config_training['num_epochs']
         print("Total Training Samples: ", len(data_train))
         for epoch in tqdm(range(num_epochs)):
-            train_start_time = time.monotonic()
+            start_time_train = time.monotonic()
             # Train one epoch
-            train_loss, train_metric = self._train_one_epoch(model, dataloader_train, optimizer, criterion, metric)
-            train_end_time = time.monotonic()
-            val_start_time = time.monotonic()
+            loss_train, metric_train = self._train_one_epoch(model, dataloader_train, optimizer, criterion, metric)
+            end_time_train = time.monotonic()
+            start_time_valid = time.monotonic()
             # Validate
-            val_loss, val_metric = self.evaluate(model, data_valid, config_evaluation)
-            val_end_time = time.monotonic()
-            # Append loss and accuracy to class lists
-            # self.train_loss_list.append(train_loss)
-            # self.train_metric_list.append(train_metric)
-            # self.val_loss_list.append(val_loss)
-            # self.val_metric_list.append(val_metric)
+            loss_valid, metric_valid = self.evaluate(model, data_valid, config_evaluation)
+            end_time_valid = time.monotonic()
+            # Append loss and metric to training_meta_data
+            training_meta_data['loss_train'].append(loss_train)
+            training_meta_data['loss_valid'].append(loss_valid)
+            training_meta_data['metric_train'].append(metric_train)
+            training_meta_data['metric_valid'].append(metric_valid)
             # Prints
             print("Epoch-%d: " % (epoch+1))
             print("Training: Loss = %.4f, Accuracy = %.4f, Time = %.2f seconds"\
-                % (train_loss, train_metric, train_end_time - train_start_time))
+                % (loss_train, metric_train, end_time_train - start_time_train))
             print("Validation: Loss = %.4f, Accuracy = %.4f, Time = %.2f seconds"\
-                % (val_loss, val_metric, val_end_time - val_start_time))
+                % (loss_valid, metric_valid, end_time_valid - start_time_valid))
             print("")
         # self._save_model(model)
         # print(f'model saved at: {self.save_dir}/{self.name}.pth')
         print("="*50)
-        return model
+        return model, training_meta_data
 
+    def evaluate(
+        self,
+        model: Model,
+        data_valid: Data,
+        config_evaluation: dict
+        ) -> Tuple[float]:
+        """_summary_
+
+        Args:
+            model (nn.Module): _description_
+            loader (DataLoader): _description_
+            criterion (Any): _description_
+
+        Returns:
+            Tuple[float]: _description_
+        """
+        model.model.to(self.device)
+        metric = self._get_metric(config_evaluation).to(self.device)
+        criterion = self._get_criterion(config_evaluation)
+        dataloader = data_valid.get_dataloader()
+        output, label = self._make_predictions(model, dataloader)
+        val_metric = metric(output, label).item()
+        val_loss = criterion(output, label).item()
+        return val_loss, val_metric
+    
     def _train_one_epoch(
         self,
         model: torch.nn.Module,
@@ -88,11 +136,11 @@ class ModelEngine:
             # Backpropagation
             loss.backward()
             # Calculate metric
-            metric = metric(output, label)
+            metric_value = metric(output, label)
             # Optimizing weights
             optimizer.step()
             epoch_loss += loss.item()
-            epoch_metric += metric.item()
+            epoch_metric += metric_value.item()
         return epoch_loss / len(dataloader), epoch_metric / len(dataloader)
     
     def _make_predictions(
@@ -129,30 +177,6 @@ class ModelEngine:
                 else:
                     all_labels = label
         return all_outputs, all_labels
-
-    def evaluate(
-        self,
-        model: Model,
-        data_valid: Data,
-        config_evaluation: dict
-        ) -> Tuple[float]:
-        """_summary_
-
-        Args:
-            model (nn.Module): _description_
-            loader (DataLoader): _description_
-            criterion (Any): _description_
-
-        Returns:
-            Tuple[float]: _description_
-        """
-        metric = self._get_metric(config_evaluation)
-        criterion = self._get_criterion(config_evaluation)
-        dataloader = data_valid.get_dataloader()
-        output, label = self._make_predictions(model, dataloader)
-        val_metric = metric(output, label).item()
-        val_loss = criterion(output, label).item()
-        return val_loss, val_metric
     
     @staticmethod
     def _get_optimizer(model: Model, config: dict) -> torch.optim.Optimizer:
@@ -199,8 +223,18 @@ class ModelEngine:
             Generally from the library: TorchMetrics
             Implementing a Custom Metric: https://lightning.ai/docs/torchmetrics/stable/pages/implement.html
         """
-        metric_name = config['criterion']['name']
-        metric_config = config['criterion']['config']
+        metric_name = config['metric']['name']
+        metric_config = config['metric']['config']
         metric_cls = load_from_import_str(metric_name)
         metric = metric_cls(**metric_config)
         return metric
+    
+    def plot(self, meta_data: dict, to_plot: Union[str, List]):
+        if isinstance(to_plot, str):
+            plt.plot(meta_data[to_plot], label=to_plot)
+        else:
+            for to_plot_sub in to_plot:
+                plt.plot(meta_data[to_plot_sub], label=to_plot_sub)
+        plt.title('Meta Data Plot')
+        plt.legend()
+        plt.show()
