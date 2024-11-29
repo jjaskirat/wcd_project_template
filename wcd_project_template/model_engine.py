@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import time
 import torch
 from tqdm import tqdm
-from typing import Any, Callable, Tuple, Union, List
+from typing import Any, Callable, Tuple, Union, List, Dict
 
 from wcd_project_template.data import Data
 from wcd_project_template.model import Model
@@ -42,10 +42,11 @@ class ModelEngine:
             'metric_valid': [],
         }
 
-        model.model.to(self.device)
-        optimizer = self._get_optimizer(model.model, config_training)
+        model.to(self.device)
+        optimizer = self._get_optimizer(model, config_training)
         criterion = self._get_criterion(config_training)
-        metric = self._get_metric(config_training).to(self.device)
+        metric = self._get_metric(config_training)
+        metric = metric.to(self.device) if metric else metric
         # df_train, df_val = self._get_df_splits()
         dataloader_train = data_train.get_dataloader()
         num_epochs = config_training['num_epochs']
@@ -65,11 +66,15 @@ class ModelEngine:
             training_meta_data['metric_train'].append(metric_train)
             training_meta_data['metric_valid'].append(metric_valid)
             # Prints
-            print("Epoch-%d: " % (epoch+1))
-            print("Training: Loss = %.4f, Accuracy = %.4f, Time = %.2f seconds"\
-                % (loss_train, metric_train, end_time_train - start_time_train))
-            print("Validation: Loss = %.4f, Accuracy = %.4f, Time = %.2f seconds"\
-                % (loss_valid, metric_valid, end_time_valid - start_time_valid))
+            print(f"Epoch-{epoch + 1}: ===========================================")
+            print(f"Training: ===========\
+            \nLoss: {loss_train},\
+            \nMetrics: {metric_train},\
+            \nTime: {end_time_train - start_time_train} seconds")
+            print(f"Validation: =========\
+            \nLoss = {loss_valid},\
+            \nMetrics: {metric_valid},\
+            \nTime: {end_time_valid - start_time_valid} seconds")
             print("")
         # self._save_model(model)
         # print(f'model saved at: {self.save_dir}/{self.name}.pth')
@@ -92,13 +97,17 @@ class ModelEngine:
         Returns:
             Tuple[float]: _description_
         """
-        model.model.to(self.device)
+        model.to(self.device)
         metric = self._get_metric(config_evaluation).to(self.device)
         criterion = self._get_criterion(config_evaluation)
         dataloader = data_valid.get_dataloader()
         output, label = self._make_predictions(model, dataloader)
-        val_metric = metric(output, label).item()
-        val_loss = criterion(output, label).item()
+        
+        val_metric = metric(output, label) if metric is not None else torch.Tensor([0])
+        val_loss = criterion(output, label) if criterion is not None else torch.Tensor([0])
+        val_metric = self.to_numpy_obj(val_metric)
+        val_loss = self.to_numpy_obj(val_loss)
+
         return val_loss, val_metric
     
     def _train_one_epoch(
@@ -122,31 +131,43 @@ class ModelEngine:
             epoch loss and epoch accuracy
         """
         epoch_loss = 0
-        epoch_metric = 0
+        epoch_metric = {}
         # Train the model
-        model = model.model
+        # model = model.model
         model.train()
         for (input, label) in dataloader:
-            input = input.to(self.device)
-            label = label.to(self.device)
+            input, label = self.preprocess_data_for_training(input, label)
             # Training pass
             optimizer.zero_grad()
-            output = model(input)
-            loss = criterion(output, label)
+            try:
+                output = model(input)
+            except:
+                output = model(*input)
+            output = self.postprocess_output_after_training(output)
+            loss = criterion(output, label) if criterion is not None else torch.Tensor([0])
             # Backpropagation
             loss.backward()
             # Calculate metric
-            metric_value = metric(output, label)
+            metric_value = metric(output, label) if metric is not None else torch.Tensor([0])
+            if not isinstance(metric_value, dict):
+                metric_value = {
+                    type(metric): metric_value
+                }
             # Optimizing weights
             optimizer.step()
             epoch_loss += loss.item()
-            epoch_metric += metric_value.item()
-        return epoch_loss / len(dataloader), epoch_metric / len(dataloader)
+            metric_value = self.to_numpy_obj(metric_value)
+            epoch_metric = self.update_metric(epoch_metric, metric_value)
+        return (
+            epoch_loss / len(dataloader),
+            {k: v / len(dataloader) for k, v in epoch_metric.items()}
+        )
     
     def _make_predictions(
         self,
         model: torch.nn.Module,
-        dataloader: torch.utils.data.DataLoader
+        dataloader: torch.utils.data.DataLoader,
+        return_input: bool = False,
         ) -> Tuple[torch.Tensor]:
         """Makes the prediction of model on dataloader
 
@@ -159,24 +180,61 @@ class ModelEngine:
         """
         all_labels = None
         all_outputs = None
+        all_inputs = None
         # Evaluate the model
-        model = model.model
+        # model = model.model
         model.eval()
         with torch.no_grad():
             for (input, label) in dataloader:
-                input = input.to(self.device)
-                label = label.to(self.device)
+                input, label = self.preprocess_data_for_prediction(input, label)
                 # Run predictions
                 output = model(input)
-                if all_outputs is not None:
-                    all_outputs = torch.cat([all_outputs, output])
-                else:
-                    all_outputs = output
-                if all_labels is not None:
-                    all_labels = torch.cat([all_labels, label])
-                else:
-                    all_labels = label
-        return all_outputs, all_labels
+                output = self.postprocess_output_after_prediction(output)
+                all_outputs = self.append_new_value(all_outputs, output)
+                all_labels = self.append_new_value(all_labels, label)
+                all_inputs = self.append_new_value(all_inputs, input)
+        
+        if return_input:
+            return all_outputs, all_labels, all_inputs
+        else:
+            return all_outputs, all_labels
+    
+    def preprocess_data_for_training(self, input, label):
+        input = input.to(self.device)
+        label = label.to(self.device)
+        return input, label
+    
+    def postprocess_output_after_training(self, output):
+        return output
+    
+    def preprocess_data_for_prediction(self, input, label):
+        input = input.to(self.device)
+        label = label.to(self.device)
+        return input, label
+    
+    def postprocess_output_after_prediction(self, output):
+        return output
+    
+    def append_new_value(self, entire_list, new_value):
+        if entire_list is None:
+            entire_list = new_value
+        elif isinstance(entire_list, torch.Tensor):
+            entire_list = torch.cat([entire_list, new_value])
+        elif isinstance(entire_list, list):
+            entire_list += new_value
+        else:
+            raise NotImplementedError
+        
+        return entire_list
+    
+    def update_metric(self, epoch_metric, metric_value):
+        if epoch_metric == {}:
+            for k, v in metric_value.items():
+                epoch_metric[k] = v
+        else:
+            for k, v in metric_value.items():
+                epoch_metric[k] += v
+        return epoch_metric
     
     @staticmethod
     def _get_optimizer(model: Model, config: dict) -> torch.optim.Optimizer:
@@ -211,7 +269,7 @@ class ModelEngine:
         criterion_name = config['criterion']['name']
         criterion_config = config['criterion']['config']
         criterion_cls = load_from_import_str(criterion_name)
-        criterion = criterion_cls(**criterion_config)
+        criterion = criterion_cls(**criterion_config) if criterion_cls is not None else None
         return criterion
     
     @staticmethod
@@ -226,7 +284,7 @@ class ModelEngine:
         metric_name = config['metric']['name']
         metric_config = config['metric']['config']
         metric_cls = load_from_import_str(metric_name)
-        metric = metric_cls(**metric_config)
+        metric = metric_cls(**metric_config) if metric_cls is not None else None
         return metric
     
     def plot(self, meta_data: dict, to_plot: Union[str, List]):
@@ -238,3 +296,12 @@ class ModelEngine:
         plt.title('Meta Data Plot')
         plt.legend()
         plt.show()
+        
+    def to_numpy_obj(self, torch_obj: Union[torch.Tensor, Dict, List]):
+        if isinstance(torch_obj, dict):
+            numpy_obj = {k: v.detach().cpu().numpy() for k,v in torch_obj.items()}
+        elif isinstance(torch_obj, list):
+            numpy_obj = [i.detach().cpu().numpy() for i in torch_obj]
+        else:
+            numpy_obj = torch_obj.detach().cpu().numpy()
+        return numpy_obj

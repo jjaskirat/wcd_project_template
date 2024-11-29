@@ -9,11 +9,16 @@ setup(
    packages=find_packages(),
    install_requires=[
        'albumentations',
+       'kagglehub',
        'timm',
        'numpy',
        'matplotlib',
        'pandas',
-       'torch',
+       'seaborn',
+       'segmentation-models-pytorch',
+       'scikit-learn',
+    #    'torch',
+    #    'torchvision',
        'torchmetrics',
        'tqdm',
    ], #external packages as dependencies
