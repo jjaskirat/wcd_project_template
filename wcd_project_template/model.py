@@ -23,7 +23,7 @@ class Model(torch.nn.Module):
 
     def load_model_weights(self, weights_path):
         if weights_path is not None:
-            self.model.load_state_dict(torch.load(weights_path))
+            self.load_state_dict(torch.load(weights_path))
     
     def freeze_layers(self, freeze_layers):
         for name, param in self.named_parameters():

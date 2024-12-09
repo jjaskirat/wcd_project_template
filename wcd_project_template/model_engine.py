@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import matplotlib.pyplot as plt
 import time
 import torch
@@ -59,6 +60,8 @@ class ModelEngine:
             start_time_valid = time.monotonic()
             # Validate
             loss_valid, metric_valid = self.evaluate(model, data_valid, config_evaluation)
+            # loss_valid = 0
+            # metric_valid = 0
             end_time_valid = time.monotonic()
             # Append loss and metric to training_meta_data
             training_meta_data['loss_train'].append(loss_train)
@@ -102,9 +105,27 @@ class ModelEngine:
         criterion = self._get_criterion(config_evaluation)
         dataloader = data_valid.get_dataloader()
         output, label = self._make_predictions(model, dataloader)
-        
-        val_metric = metric(output, label) if metric is not None else torch.Tensor([0])
-        val_loss = criterion(output, label) if criterion is not None else torch.Tensor([0])
+        if isinstance(output, list):
+            total_metric = {}
+            # val_metric = sum([metric(out, lab) for out, lab in zip(output, label)])
+            # val_metric = val_metric / len(output)
+            for out, lab in zip(output, label):
+                val_metric = metric(out, lab)
+                if not isinstance(val_metric, dict):
+                    val_metric = {
+                    type(metric): val_metric
+                }
+                for metric_key in val_metric:
+                    if metric_key in total_metric:
+                        total_metric[metric_key] += val_metric[metric_key]
+                    else:
+                        total_metric[metric_key] = val_metric[metric_key]
+            total_metric = {k: v/len(output) for k,v in total_metric.items()}
+            val_loss = sum([criterion(out, lab) for out, lab in zip(output, label)])
+            val_loss = val_loss / len(output)
+        else:
+            val_metric = metric(output, label) if metric is not None else torch.Tensor([0])
+            val_loss = criterion(output, label) if criterion is not None else torch.Tensor([0])
         val_metric = self.to_numpy_obj(val_metric)
         val_loss = self.to_numpy_obj(val_loss)
 
@@ -135,14 +156,11 @@ class ModelEngine:
         # Train the model
         # model = model.model
         model.train()
-        for (input, label) in dataloader:
-            input, label = self.preprocess_data_for_training(input, label)
+        for item in dataloader:
+            input, label = self.preprocess_data_for_training(item)
             # Training pass
             optimizer.zero_grad()
-            try:
-                output = model(input)
-            except:
-                output = model(*input)
+            output = self._call_model(model, input)
             output = self.postprocess_output_after_training(output)
             loss = criterion(output, label) if criterion is not None else torch.Tensor([0])
             # Backpropagation
@@ -162,6 +180,13 @@ class ModelEngine:
             epoch_loss / len(dataloader),
             {k: v / len(dataloader) for k, v in epoch_metric.items()}
         )
+        
+    def _call_model(self, model, input):
+        try:
+            output = model(input)
+        except:
+            output = model(*input)
+        return output
     
     def _make_predictions(
         self,
@@ -185,10 +210,11 @@ class ModelEngine:
         # model = model.model
         model.eval()
         with torch.no_grad():
-            for (input, label) in dataloader:
-                input, label = self.preprocess_data_for_prediction(input, label)
+            for item in dataloader:
+                input, label = self.preprocess_data_for_prediction(item)
                 # Run predictions
-                output = model(input)
+                output = self._call_model(model, input)
+                # print(type(output))
                 output = self.postprocess_output_after_prediction(output)
                 all_outputs = self.append_new_value(all_outputs, output)
                 all_labels = self.append_new_value(all_labels, label)
@@ -199,7 +225,8 @@ class ModelEngine:
         else:
             return all_outputs, all_labels
     
-    def preprocess_data_for_training(self, input, label):
+    def preprocess_data_for_training(self, item):
+        input, label = item
         input = input.to(self.device)
         label = label.to(self.device)
         return input, label
@@ -207,7 +234,8 @@ class ModelEngine:
     def postprocess_output_after_training(self, output):
         return output
     
-    def preprocess_data_for_prediction(self, input, label):
+    def preprocess_data_for_prediction(self, item):
+        input, label = item
         input = input.to(self.device)
         label = label.to(self.device)
         return input, label
@@ -217,13 +245,23 @@ class ModelEngine:
     
     def append_new_value(self, entire_list, new_value):
         if entire_list is None:
-            entire_list = new_value
-        elif isinstance(entire_list, torch.Tensor):
-            entire_list = torch.cat([entire_list, new_value])
-        elif isinstance(entire_list, list):
-            entire_list += new_value
+            if isinstance(new_value, torch.Tensor):
+                entire_list = new_value
+            elif isinstance(new_value, list):
+                entire_list = new_value
+            else:
+                entire_list = [new_value]
         else:
-            raise NotImplementedError
+            if isinstance(new_value, torch.Tensor):
+                entire_list = torch.cat([entire_list, new_value])
+            elif isinstance(new_value, list):
+                entire_list += new_value
+            else:
+                entire_list.append(new_value)
+            # elif isinstance(new_value, dict) or isinstance(OrderedDict):
+            #     entire_list = {k: self.append_new_value(entire_list[k], v) for k,v in new_value.items()}
+            # else:
+            #     raise NotImplementedError
         
         return entire_list
     
