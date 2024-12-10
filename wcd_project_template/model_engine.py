@@ -1,8 +1,9 @@
 from collections import OrderedDict
 import matplotlib.pyplot as plt
+import pandas as pd
 import time
 import torch
-from tqdm import tqdm
+from tqdm.autonotebook import tqdm
 from typing import Any, Callable, Tuple, Union, List, Dict
 
 from wcd_project_template.data import Data
@@ -105,7 +106,7 @@ class ModelEngine:
         criterion = self._get_criterion(config_evaluation)
         dataloader = data_valid.get_dataloader()
         output, label = self._make_predictions(model, dataloader)
-        if isinstance(output, list):
+        if isinstance(output[0], tuple):
             total_metric = {}
             # val_metric = sum([metric(out, lab) for out, lab in zip(output, label)])
             # val_metric = val_metric / len(output)
@@ -113,18 +114,25 @@ class ModelEngine:
                 val_metric = metric(out, lab)
                 if not isinstance(val_metric, dict):
                     val_metric = {
-                    type(metric): val_metric
+                    metric.__class__.__name__: val_metric
                 }
                 for metric_key in val_metric:
+                    if metric_key == 'classes':
+                        continue
                     if metric_key in total_metric:
                         total_metric[metric_key] += val_metric[metric_key]
                     else:
                         total_metric[metric_key] = val_metric[metric_key]
             total_metric = {k: v/len(output) for k,v in total_metric.items()}
-            val_loss = sum([criterion(out, lab) for out, lab in zip(output, label)])
+            val_loss = sum([criterion(out, lab) for out, lab in zip(output, label)])\
+                       if criterion is not None else torch.Tensor([0.])
             val_loss = val_loss / len(output)
         else:
             val_metric = metric(output, label) if metric is not None else torch.Tensor([0])
+            if not isinstance(val_metric, dict):
+                    val_metric = {
+                    metric.__class__.__name__: val_metric
+                }
             val_loss = criterion(output, label) if criterion is not None else torch.Tensor([0])
         val_metric = self.to_numpy_obj(val_metric)
         val_loss = self.to_numpy_obj(val_loss)
@@ -169,7 +177,7 @@ class ModelEngine:
             metric_value = metric(output, label) if metric is not None else torch.Tensor([0])
             if not isinstance(metric_value, dict):
                 metric_value = {
-                    type(metric): metric_value
+                    metric.__class__.__name__: metric_value
                 }
             # Optimizing weights
             optimizer.step()
@@ -209,6 +217,7 @@ class ModelEngine:
         # Evaluate the model
         # model = model.model
         model.eval()
+        torch.cuda.empty_cache()
         with torch.no_grad():
             for item in dataloader:
                 input, label = self.preprocess_data_for_prediction(item)
@@ -218,7 +227,8 @@ class ModelEngine:
                 output = self.postprocess_output_after_prediction(output)
                 all_outputs = self.append_new_value(all_outputs, output)
                 all_labels = self.append_new_value(all_labels, label)
-                all_inputs = self.append_new_value(all_inputs, input)
+                if return_input:
+                    all_inputs = self.append_new_value(all_inputs, input)
         
         if return_input:
             return all_outputs, all_labels, all_inputs
@@ -325,12 +335,22 @@ class ModelEngine:
         metric = metric_cls(**metric_config) if metric_cls is not None else None
         return metric
     
-    def plot(self, meta_data: dict, to_plot: Union[str, List]):
+    def plot(self, meta_data: dict, to_plot):
+        def plot_item(to_plot: str):
+            if to_plot.startswith('loss'):
+                plt.plot(meta_data[to_plot], label=to_plot)
+            else:
+                df_ = pd.DataFrame(meta_data[to_plot])
+                for column in list(df_):
+                    if column == 'classes':
+                        continue
+                    df_[column].astype(float).plot(label=f'{to_plot}_{column}')
+                
         if isinstance(to_plot, str):
-            plt.plot(meta_data[to_plot], label=to_plot)
+            plot_item(to_plot)
         else:
             for to_plot_sub in to_plot:
-                plt.plot(meta_data[to_plot_sub], label=to_plot_sub)
+                plot_item(to_plot_sub)
         plt.title('Meta Data Plot')
         plt.legend()
         plt.show()
