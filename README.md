@@ -14,6 +14,9 @@ The Template provides wrappers (Data and Model classes) and an API (ModelEngine)
 
 ## Installation
 ```
+python3 -m venv wcd-venv
+source wcd-venv/bin/activate
+
 git clone https://github.com/jjaskirat/wcd_project_template.git
 cd wcd_project_template
 python3 setup.py install
