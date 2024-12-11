@@ -12,6 +12,13 @@ There are 5 key components of any ML Project
 
 The Template provides wrappers (Data and Model classes) and an API (ModelEngine) that works hand-in-hand with a Configuration. Together, they form a complete Training API.
 
+## Installation
+```
+git clone https://github.com/jjaskirat/wcd_project_template.git
+cd wcd_project_template
+python3 setup.py install
+```
+
 ## Problem Statement / Task
 The task is a elements of machine learning, acting as a guiding beacon for the entire ML process. It outlines the exact problem to be solved, as well as the model's objectives and aims. 
 
