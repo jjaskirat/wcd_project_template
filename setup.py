@@ -17,8 +17,8 @@ setup(
        'seaborn',
        'segmentation-models-pytorch',
        'scikit-learn',
-    #    'torch',
-    #    'torchvision',
+       'torch',
+       'torchvision',
        'torchmetrics',
        'tqdm',
    ], #external packages as dependencies
