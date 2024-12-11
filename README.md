@@ -1,10 +1,3 @@
-## TODOs:
-- TensorboardX support
-- Model Checkpointing
-- Template for configurations
-- Support for smp and detectron2
-    - Use and showcase custom methods if required
-
 # wcd_project_template
 This repository acts as the Computer Vision Project Template for WeCloudData.
 
