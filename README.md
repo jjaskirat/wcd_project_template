@@ -1,9 +1,15 @@
 # wcd_project_template
 This repository acts as the Computer Vision Project Template for WeCloudData.
 
-The goal of this template is to make the Capstone Project implementation easy for the students. 
+The goal of this template is to make the Capstone Project implementation easy for the students.
 
-There are 5 key components of any ML Project
+### The Template can be used for 4 different problems
+- Image Classification
+- Image Segmentation
+- Object Detection
+- Object Tracking
+
+### There are 5 key components of any ML Project
 - Problem Statement
 - Dataset
 - Model
