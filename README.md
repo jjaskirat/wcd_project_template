@@ -27,6 +27,9 @@ source wcd-venv/bin/activate
 python3 setup.py install
 ```
 
+### Video Demo Link!!!:
+https://www.dropbox.com/scl/fo/ti6gyhk68w6ihlr7lpj7r/AApRblvm3K4sPU34PREC0pU?rlkey=2t45bew7erkt6q6hfmbiujhhg&st=gjtxymoa&dl=0
+
 ## Problem Statement / Task
 The task is a elements of machine learning, acting as a guiding beacon for the entire ML process. It outlines the exact problem to be solved, as well as the model's objectives and aims. 
 
